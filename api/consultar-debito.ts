@@ -1,66 +1,39 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { perfil, DESCONTO_AVISTA_PCT, PARCELAS_MAX } from "./_perfil";
+
+const COMPETENCIAS: [string, number][] = [
+  ["abr/2026", 58],
+  ["mai/2026", 27],
+];
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { cpf } = req.body ?? {};
+  const cpf: string = req.body?.cpf ?? "";
+  const { nome, nFaturas, valorFatura } = perfil(cpf);
 
-  if (!cpf) {
-    return res.status(400).json({ error: "cpf is required" });
-  }
+  const faturas = COMPETENCIAS.slice(0, nFaturas).map(([comp, dias], i) => ({
+    id: `F-2026-${(4 + i).toString().padStart(2, "0")}`,
+    competencia: comp,
+    valor: valorFatura,
+    dias_atraso: dias,
+  }));
 
-  // Deterministic mock based on last 2 digits of CPF
-  const digits = cpf.replace(/\D/g, "");
-  const seed = parseInt(digits.slice(-2), 10);
-
-  if (seed % 10 === 0) {
-    // ~10% adimplentes — sem débito
-    return res.status(200).json({
-      cpf,
-      nome: "Maria Aparecida Lima",
-      tem_debito: false,
-      message: "Nenhuma fatura em aberto encontrada.",
-    });
-  }
-
-  const total = 194.85 * 2;
-  const descontoPct = 30;
-  const valorFinal = parseFloat((total * (1 - descontoPct / 100)).toFixed(2));
-  const parcelasMax = 6;
-  const valorParcela = parseFloat((total / parcelasMax).toFixed(2));
+  const total = Math.round(faturas.reduce((s, f) => s + f.valor, 0) * 100) / 100;
+  const valorAvista = Math.round(total * (1 - DESCONTO_AVISTA_PCT / 100) * 100) / 100;
+  const valorParcela = Math.round((total * 1.1) / PARCELAS_MAX * 100) / 100;
 
   return res.status(200).json({
-    cpf,
-    nome: "João da Silva",
-    tem_debito: true,
+    nome,
     total,
-    faturas: [
-      {
-        id: "F-2026-04",
-        competencia: "abr/2026",
-        valor: 194.85,
-        dias_atraso: 58,
-      },
-      {
-        id: "F-2026-05",
-        competencia: "mai/2026",
-        valor: 194.85,
-        dias_atraso: 27,
-      },
-    ],
+    faturas,
     ofertas: [
-      {
-        tipo: "a_vista",
-        desconto_pct: descontoPct,
-        valor_final: valorFinal,
-      },
+      { tipo: "a_vista", desconto_pct: DESCONTO_AVISTA_PCT, valor_final: valorAvista },
       {
         tipo: "parcelado",
-        parcelas_max: parcelasMax,
+        parcelas_max: PARCELAS_MAX,
         valor_parcela: valorParcela,
-        total: parseFloat((valorParcela * parcelasMax).toFixed(2)),
+        total: Math.round(valorParcela * PARCELAS_MAX * 100) / 100,
       },
     ],
   });
