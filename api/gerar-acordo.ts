@@ -7,8 +7,11 @@ import type { Acordo } from "./_types";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { cpf, tipo = "a_vista", meio = "pix", valor, num_parcelas } = req.body ?? {};
-  if (!cpf || !valor) return res.status(400).json({ error: "cpf e valor são obrigatórios" });
+  const { cpf: cpfRaw, tipo = "a_vista", meio = "pix", valor, num_parcelas } = req.body ?? {};
+  if (!cpfRaw || !valor) return res.status(400).json({ error: "cpf e valor são obrigatórios" });
+
+  // Normaliza CPF: remove tudo que não é dígito
+  const cpf = String(cpfRaw).replace(/\D/g, "");
 
   const valorNum = Math.round(parseFloat(valor) * 100) / 100;
   const id = acordoId(String(cpf), String(tipo), valorNum);

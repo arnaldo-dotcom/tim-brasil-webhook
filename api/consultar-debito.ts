@@ -5,11 +5,19 @@ import { perfil, DESCONTO_AVISTA_PCT, PARCELAS_MAX } from "./_perfil";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { cpf, phone } = req.body ?? {};
+  const body = req.body ?? {};
+
+  // Moveo pode enviar variáveis no nível raiz, em context{} ou em variables{}
+  const cpfRaw = body.cpf ?? body.context?.cpf ?? body.variables?.cpf ?? null;
+  const phoneRaw = body.phone ?? body.context?.phone ?? body.variables?.phone ?? null;
+
+  // Normaliza CPF: remove tudo que não é dígito (voz Twilio transcreve "1, 2, 3, ...")
+  const cpf = cpfRaw ? String(cpfRaw).replace(/\D/g, "") : null;
+  const phone = phoneRaw ? String(phoneRaw) : null;
 
   // 1. Tenta buscar no KV (CRM simulado)
-  let cliente = cpf ? await getClienteByCpf(String(cpf)) : null;
-  if (!cliente && phone) cliente = await getClienteByPhone(String(phone));
+  let cliente = cpf ? await getClienteByCpf(cpf) : null;
+  if (!cliente && phone) cliente = await getClienteByPhone(phone);
 
   if (cliente) {
     const faturas = cliente.faturas.filter((f) => f.status === "aberto");
