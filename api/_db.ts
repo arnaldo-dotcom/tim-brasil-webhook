@@ -1,4 +1,9 @@
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
+
+const kv = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
 import type { Cliente } from "./_types";
 
 export async function getClienteByCpf(cpf: string): Promise<Cliente | null> {
