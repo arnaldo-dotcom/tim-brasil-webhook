@@ -7,56 +7,80 @@ import type { Acordo } from "./_types";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { cpf: cpfRaw, tipo = "a_vista", meio = "pix", valor, num_parcelas } = req.body ?? {};
-  if (!cpfRaw || !valor) return res.status(400).json({ error: "cpf e valor são obrigatórios" });
+  try {
+    const body = req.body ?? {};
+    const ctx = body.context ?? body.variables ?? body ?? {};
 
-  // Normaliza CPF: remove tudo que não é dígito
-  const cpf = String(cpfRaw).replace(/\D/g, "");
+    const cpfRaw = ctx.cpf ?? ctx.user?.cpf ?? null;
+    const numParcelasRaw = ctx.num_parcelas ?? 1;
+    const parcelas = Math.max(1, Number(numParcelasRaw));
+    const tipo: string = ctx.tipo_pagamento ?? (parcelas > 1 ? "parcelado" : "a_vista");
+    const meio: string = ctx.meio_pagamento ?? (tipo === "parcelado" ? "boleto" : "pix");
+    const valorRaw = ctx.total ?? ctx.valor_avista ?? ctx.valor ?? null;
 
-  const valorNum = Math.round(parseFloat(valor) * 100) / 100;
-  const id = acordoId(String(cpf), String(tipo), valorNum);
+    if (!cpfRaw || !valorRaw) {
+      return res.status(200).json({ context: { erro_acordo: "cpf ou valor ausente" } });
+    }
 
-  const resp: Record<string, unknown> = {
-    acordo_id: id,
-    tipo,
-    meio,
-    valor: valorNum,
-    vencimento: vencimento(3),
-  };
+    const cpf = String(cpfRaw).replace(/\D/g, "");
+    const valorNum = tipo === "parcelado"
+      ? Math.round(parseFloat(String(ctx.total ?? valorRaw)) * 100) / 100
+      : Math.round(parseFloat(String(ctx.valor_avista ?? valorRaw)) * 100) / 100;
 
-  if (meio === "pix") {
-    resp.pix_copia_cola = gerarPixCopiaCola(valorNum, id.replace(/-/g, ""));
-  } else {
-    resp.boleto_linha_digitavel = `34191.79001 01043.510047 91020.150008 1 99870000${String(Math.round(valorNum * 100)).padStart(8, "0")}`;
-    resp.boleto_url = `https://pag.tim.demo/b/${id}`;
-  }
+    const id = acordoId(cpf, tipo, valorNum);
+    const venc = vencimento(3);
 
-  if (tipo === "parcelado") {
-    const parcelas = Number(num_parcelas ?? 6);
-    const valorParcela = Math.round((valorNum / parcelas) * 100) / 100;
-    resp.num_parcelas = parcelas;
-    resp.valor_parcela = valorParcela;
-    resp.vencimentos = Array.from({ length: parcelas }, (_, i) => vencimento(3 + i * 30));
-  }
-
-  // Persiste acordo no CRM (KV) se cliente existir
-  const cliente = await getClienteByCpf(String(cpf));
-  if (cliente) {
-    const novoAcordo: Acordo = {
+    const vars: Record<string, unknown> = {
       acordo_id: id,
-      tipo: tipo as Acordo["tipo"],
-      valor: valorNum,
-      vencimento: String(resp.vencimento),
-      criado_em: new Date().toISOString(),
-      status: "pendente",
+      tipo_acordo: tipo,
+      meio_pagamento: meio,
+      valor_acordo: valorNum,
+      vencimento_acordo: venc,
     };
-    // Marca faturas como negociado
-    cliente.faturas = cliente.faturas.map((f) =>
-      f.status === "aberto" ? { ...f, status: "negociado" as const } : f
-    );
-    cliente.acordos = [...(cliente.acordos ?? []), novoAcordo];
-    await saveCliente(cliente);
-  }
 
-  return res.status(200).json(resp);
+    if (tipo === "parcelado") {
+      const valorParcela = Math.round((valorNum / parcelas) * 100) / 100;
+      vars.num_parcelas_acordo = parcelas;
+      vars.valor_parcela_acordo = valorParcela;
+      vars.primeira_parcela = venc;
+      if (meio === "pix") {
+        vars.pix_copia_cola = gerarPixCopiaCola(valorParcela, `${id.replace(/-/g, "")}01`);
+      } else {
+        vars.boleto_linha = `34191.79001 01043.510047 91020.150008 1 99870000${String(Math.round(valorParcela * 100)).padStart(8, "0")}`;
+      }
+    } else {
+      if (meio === "pix") {
+        vars.pix_copia_cola = gerarPixCopiaCola(valorNum, id.replace(/-/g, ""));
+      } else {
+        vars.boleto_linha = `34191.79001 01043.510047 91020.150008 1 99870000${String(Math.round(valorNum * 100)).padStart(8, "0")}`;
+      }
+    }
+
+    // Persiste no KV se cliente existir
+    try {
+      const cliente = await getClienteByCpf(cpf);
+      if (cliente) {
+        const novoAcordo: Acordo = {
+          acordo_id: String(id),
+          tipo: tipo as Acordo["tipo"],
+          valor: valorNum,
+          vencimento: venc,
+          criado_em: new Date().toISOString(),
+          status: "pendente",
+        };
+        cliente.faturas = cliente.faturas.map((f) =>
+          f.status === "aberto" ? { ...f, status: "negociado" as const } : f
+        );
+        cliente.acordos = [...(cliente.acordos ?? []), novoAcordo];
+        await saveCliente(cliente);
+      }
+    } catch {
+      // KV indisponível — acordo gerado mas não persistido
+    }
+
+    return res.status(200).json({ context: vars });
+  } catch (err) {
+    console.error("[gerar-acordo] error:", err);
+    return res.status(200).json({ context: { erro_acordo: "erro interno" } });
+  }
 }
