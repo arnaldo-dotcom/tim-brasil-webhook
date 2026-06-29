@@ -15,7 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const numParcelasRaw = ctx.num_parcelas ?? 1;
     const PT_NUMS: Record<string, number> = { dois: 2, duas: 2, tres: 3, três: 3, quatro: 4, cinco: 5, seis: 6 };
     const rawStr = String(numParcelasRaw).toLowerCase().trim();
-    const parsedNum = PT_NUMS[rawStr] ?? parseInt(rawStr, 10);
+    const numMatch = rawStr.match(/\d+/);
+    const parsedNum = PT_NUMS[rawStr] ?? (numMatch ? parseInt(numMatch[0], 10) : NaN);
     const parcelas = Math.max(1, isNaN(parsedNum) ? 1 : parsedNum);
     const tipo: string = ctx.tipo_pagamento ?? (parcelas > 1 ? "parcelado" : "a_vista");
     const meio: string = ctx.meio_pagamento ?? (tipo === "parcelado" ? "boleto" : "pix");
