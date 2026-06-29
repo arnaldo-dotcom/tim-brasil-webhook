@@ -62,17 +62,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (a.vencimento ?? a.competencia).localeCompare(b.vencimento ?? b.competencia)
       )[0];
       const dataVencimento = maisAntiga?.vencimento ?? null;
-      const nome = cliente.nome.split(" ")[0]; // primeiro nome para voz
+      const nomeVoz = cliente.nome.split(" ")[0];
       const mensagem = faturas.length === 0
-        ? `${nome}, verificamos sua conta e não encontramos faturas em aberto no momento. Se tiver dúvidas, pode falar com nossa equipe.`
-        : `${nome}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
+        ? `${nomeVoz}, verificamos sua conta e não encontramos faturas em aberto no momento. Se tiver dúvidas, pode falar com nossa equipe.`
+        : `${nomeVoz}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
       return ok(res, {
         nome: cliente.nome,
         total,
+        total_fmt: `R$ ${brl(total)}`,
         desconto_pct: desconto,
         valor_avista: valorAvista,
+        valor_avista_fmt: `R$ ${brl(valorAvista)}`,
         parcelas_max: parcelasMax,
         valor_parcela: valorParcela,
+        valor_parcela_fmt: `R$ ${brl(valorParcela)}`,
         num_faturas: faturas.length,
         data_vencimento: dataVencimento,
         mensagem_inicial: mensagem,
@@ -92,10 +95,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return ok(res, {
       nome,
       total,
+      total_fmt: `R$ ${brl(total)}`,
       desconto_pct: DESCONTO_AVISTA_PCT,
       valor_avista: valorAvista,
+      valor_avista_fmt: `R$ ${brl(valorAvista)}`,
       parcelas_max: PARCELAS_MAX,
       valor_parcela: valorParcela,
+      valor_parcela_fmt: `R$ ${brl(valorParcela)}`,
       num_faturas: nFaturas,
       data_vencimento: null,
       mensagem_inicial: mensagemFallback,
