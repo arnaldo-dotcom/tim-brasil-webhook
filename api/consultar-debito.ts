@@ -7,6 +7,11 @@ function ok(res: VercelResponse, vars: Record<string, unknown>) {
   return res.status(200).json({ context: vars });
 }
 
+function brl(v: number): string {
+  const [int, dec] = v.toFixed(2).split(".");
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + dec;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -27,10 +32,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const prefixo = String(prefixoRaw).replace(/\D/g, "").slice(0, 3);
       if (prefixo.length === 3 && !cpf.startsWith(prefixo)) {
         return ok(res, {
-          nome: "Desculpe, não confirmei a identidade do titular.",
+          nome: "Não identificado",
           total: 0,
           num_faturas: 0,
           auth_ok: false,
+          mensagem_inicial: "Não consegui confirmar sua identidade. Para sua segurança, não posso prosseguir. Se precisar de ajuda, entre em contato com a TIM.",
         });
       }
     }
@@ -56,6 +62,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (a.vencimento ?? a.competencia).localeCompare(b.vencimento ?? b.competencia)
       )[0];
       const dataVencimento = maisAntiga?.vencimento ?? null;
+      const nome = cliente.nome.split(" ")[0]; // primeiro nome para voz
+      const mensagem = faturas.length === 0
+        ? `${nome}, verificamos sua conta e não encontramos faturas em aberto no momento. Se tiver dúvidas, pode falar com nossa equipe.`
+        : `${nome}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
       return ok(res, {
         nome: cliente.nome,
         total,
@@ -65,6 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         valor_parcela: valorParcela,
         num_faturas: faturas.length,
         data_vencimento: dataVencimento,
+        mensagem_inicial: mensagem,
       });
     }
 
@@ -74,6 +85,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const total = Math.round(nFaturas * valorFatura * 100) / 100;
     const valorAvista = Math.round(total * (1 - DESCONTO_AVISTA_PCT / 100) * 100) / 100;
     const valorParcela = Math.round((total * 1.1) / PARCELAS_MAX * 100) / 100;
+    const nomeVoz = nome.split(" ")[0];
+    const mensagemFallback = nFaturas === 0
+      ? `${nomeVoz}, verificamos sua conta e não encontramos faturas em aberto no momento.`
+      : `${nomeVoz}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
     return ok(res, {
       nome,
       total,
@@ -83,6 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       valor_parcela: valorParcela,
       num_faturas: nFaturas,
       data_vencimento: null,
+      mensagem_inicial: mensagemFallback,
     });
   } catch (err) {
     console.error("[consultar-debito] unhandled error:", err);
