@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getClienteByCpf, saveCliente } from "./_db";
-import { acordoId, vencimento } from "./_perfil";
+import { acordoId, vencimento, DESCONTO_AVISTA_PCT, PARCELAS_MAX } from "./_perfil";
 import { gerarPixCopiaCola } from "./_pix";
 import type { Acordo } from "./_types";
 
@@ -17,19 +17,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rawStr = String(numParcelasRaw).toLowerCase().trim();
     const numMatch = rawStr.match(/\d+/);
     const parsedNum = PT_NUMS[rawStr] ?? (numMatch ? parseInt(numMatch[0], 10) : NaN);
-    const parcelas = Math.max(1, isNaN(parsedNum) ? 1 : parsedNum);
+    // Respeita o limite máximo de parcelas definido pelo banco
+    const parcelasMaxCtx = ctx.parcelas_max ? parseInt(String(ctx.parcelas_max), 10) : PARCELAS_MAX;
+    const parcelas = Math.min(Math.max(1, isNaN(parsedNum) ? 1 : parsedNum), parcelasMaxCtx);
     const tipo: string = ctx.tipo_pagamento ?? (parcelas > 1 ? "parcelado" : "a_vista");
     const meio: string = ctx.meio_pagamento ?? (tipo === "parcelado" ? "boleto" : "pix");
-    const valorRaw = ctx.total ?? ctx.valor_avista ?? ctx.valor ?? null;
+    // Para à vista usa o valor com desconto do banco; para parcelado usa o total com juros
+    const descontoPct = ctx.desconto_pct ? parseFloat(String(ctx.desconto_pct)) : DESCONTO_AVISTA_PCT;
+    const totalBruto = parseFloat(String(ctx.total ?? 0));
+    const valorRaw = tipo === "a_vista"
+      ? (ctx.valor_avista ?? Math.round(totalBruto * (1 - descontoPct / 100) * 100) / 100)
+      : (ctx.total ?? ctx.valor ?? null);
 
-    if (!cpfRaw || !valorRaw) {
+    if (!cpfRaw || valorRaw === null || valorRaw === undefined) {
       return res.status(200).json({ context: { erro_acordo: "cpf ou valor ausente" } });
     }
 
     const cpf = String(cpfRaw).replace(/\D/g, "");
-    const valorNum = tipo === "parcelado"
-      ? Math.round(parseFloat(String(ctx.total ?? valorRaw)) * 100) / 100
-      : Math.round(parseFloat(String(ctx.valor_avista ?? valorRaw)) * 100) / 100;
+    const valorNum = Math.round(parseFloat(String(valorRaw)) * 100) / 100;
 
     const id = acordoId(cpf, tipo, valorNum);
     const venc = vencimento(3);

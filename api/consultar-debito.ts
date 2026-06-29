@@ -17,9 +17,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Moveo envia variáveis de sessão em body.context
     const cpfRaw = ctx.cpf ?? ctx.user?.cpf ?? null;
     const phoneRaw = ctx.phone ?? ctx.user?.phone ?? null;
+    const prefixoRaw = ctx.cpf_prefixo ?? null;
 
     const cpf = cpfRaw ? String(cpfRaw).replace(/\D/g, "") || null : null;
     const phone = phoneRaw ? String(phoneRaw).replace(/\D/g, "") || null : null;
+
+    // Verifica os 3 primeiros dígitos do CPF (outbound: cpf em contexto)
+    if (cpf && prefixoRaw !== null) {
+      const prefixo = String(prefixoRaw).replace(/\D/g, "").slice(0, 3);
+      if (prefixo.length === 3 && !cpf.startsWith(prefixo)) {
+        return ok(res, {
+          nome: "Desculpe, não confirmei a identidade do titular.",
+          total: 0,
+          num_faturas: 0,
+          auth_ok: false,
+        });
+      }
+    }
 
     // 1. Busca no KV (CRM simulado)
     let cliente = null;
@@ -33,16 +47,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (cliente) {
       const faturas = cliente.faturas.filter((f) => f.status === "aberto");
       const total = Math.round(faturas.reduce((s, f) => s + f.valor, 0) * 100) / 100;
-      const valorAvista = Math.round(total * (1 - DESCONTO_AVISTA_PCT / 100) * 100) / 100;
-      const valorParcela = Math.round((total * 1.1) / PARCELAS_MAX * 100) / 100;
+      const desconto = cliente.desconto_pct ?? DESCONTO_AVISTA_PCT;
+      const parcelasMax = cliente.parcelas_max ?? PARCELAS_MAX;
+      const valorAvista = Math.round(total * (1 - desconto / 100) * 100) / 100;
+      const valorParcela = Math.round((total * 1.1) / parcelasMax * 100) / 100;
+      // Data de vencimento da fatura mais antiga em aberto
+      const maisAntiga = faturas.sort((a, b) =>
+        (a.vencimento ?? a.competencia).localeCompare(b.vencimento ?? b.competencia)
+      )[0];
+      const dataVencimento = maisAntiga?.vencimento ?? null;
       return ok(res, {
         nome: cliente.nome,
         total,
-        desconto_pct: DESCONTO_AVISTA_PCT,
+        desconto_pct: desconto,
         valor_avista: valorAvista,
-        parcelas_max: PARCELAS_MAX,
+        parcelas_max: parcelasMax,
         valor_parcela: valorParcela,
         num_faturas: faturas.length,
+        data_vencimento: dataVencimento,
       });
     }
 
@@ -60,6 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parcelas_max: PARCELAS_MAX,
       valor_parcela: valorParcela,
       num_faturas: nFaturas,
+      data_vencimento: null,
     });
   } catch (err) {
     console.error("[consultar-debito] unhandled error:", err);
