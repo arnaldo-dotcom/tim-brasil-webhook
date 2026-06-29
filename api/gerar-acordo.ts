@@ -38,6 +38,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const id = acordoId(cpf, tipo, valorNum);
     const venc = vencimento(3);
+    const nomeCtx = ctx.nome ? String(ctx.nome).split(" ")[0] : null;
+
+    function brl(v: number): string {
+      const [int, dec] = v.toFixed(2).split(".");
+      return int.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + dec;
+    }
+
+    function fmtData(iso: string): string {
+      const [y, m, d] = iso.split("-");
+      return `${d}/${m}/${y}`;
+    }
 
     const vars: Record<string, unknown> = {
       acordo_id: id,
@@ -52,17 +63,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       vars.num_parcelas_acordo = parcelas;
       vars.valor_parcela_acordo = valorParcela;
       vars.primeira_parcela = venc;
+      // Código gerado mas NÃO lido em voz — enviado via WhatsApp/SMS
       if (meio === "pix") {
         vars.pix_copia_cola = gerarPixCopiaCola(valorParcela, `${id.replace(/-/g, "")}01`);
       } else {
         vars.boleto_linha = `34191.79001 01043.510047 91020.150008 1 99870000${String(Math.round(valorParcela * 100)).padStart(8, "0")}`;
       }
+      const prefixo = nomeCtx ? `${nomeCtx}, ` : "";
+      vars.mensagem_confirmacao = `${prefixo}acordo registrado em ${parcelas} parcelas de R$ ${brl(valorParcela)}, com primeira parcela em ${fmtData(venc)}. Os dados de pagamento chegam no seu WhatsApp agora. Posso te ajudar com mais alguma coisa?`;
     } else {
+      // Código gerado mas NÃO lido em voz — enviado via WhatsApp/SMS
       if (meio === "pix") {
         vars.pix_copia_cola = gerarPixCopiaCola(valorNum, id.replace(/-/g, ""));
       } else {
         vars.boleto_linha = `34191.79001 01043.510047 91020.150008 1 99870000${String(Math.round(valorNum * 100)).padStart(8, "0")}`;
       }
+      const prefixo = nomeCtx ? `${nomeCtx}, ` : "";
+      vars.mensagem_confirmacao = `${prefixo}acordo registrado de R$ ${brl(valorNum)} à vista, com vencimento em ${fmtData(venc)}. Os dados de pagamento chegam no seu WhatsApp agora. Posso te ajudar com mais alguma coisa?`;
     }
 
     // Persiste no KV se cliente existir
