@@ -67,7 +67,6 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         <td>até ${parcMax}x</td>
         <td>${statusAcordo}</td>
         <td>${acordoCell}</td>
-        <td>${propCell}</td>
       </tr>`;
   }).join("");
 
@@ -106,10 +105,9 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         <th>Parcelamento</th>
         <th>Status</th>
         <th>Último acordo</th>
-        <th>Propensão</th>
       </tr>
     </thead>
-    <tbody>${rows || "<tr><td colspan=9 style='text-align:center;color:#6b7280;padding:32px'>Nenhum cliente cadastrado. Rode o seed primeiro.</td></tr>"}</tbody>
+    <tbody>${rows || "<tr><td colspan=8 style='text-align:center;color:#6b7280;padding:32px'>Nenhum cliente cadastrado. Rode o seed primeiro.</td></tr>"}</tbody>
   </table>
 </body>
 </html>`;
