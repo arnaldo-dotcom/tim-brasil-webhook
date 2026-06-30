@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getClienteByCpf, getClienteByPhone } from "./_db";
-import { DESCONTO_AVISTA_PCT, PARCELAS_MAX } from "./_perfil";
+import { perfil, DESCONTO_AVISTA_PCT, PARCELAS_MAX } from "./_perfil";
 
 // Moveo lê variáveis de sessão via body.context.{var} e espera a resposta no formato {"context": {...}}
 function ok(res: VercelResponse, vars: Record<string, unknown>) {
@@ -83,7 +83,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Cliente não encontrado na base
+    // Sem identificador real (web tester / sessão sem CPF e sem telefone) — usa perfil demo
+    if (!cpf && !phone) {
+      const cpfDemo = "00000000000";
+      const { nome, nFaturas, valorFatura } = perfil(cpfDemo);
+      const total = Math.round(nFaturas * valorFatura * 100) / 100;
+      const valorAvista = Math.round(total * (1 - DESCONTO_AVISTA_PCT / 100) * 100) / 100;
+      const valorParcela = Math.round((total * 1.1) / PARCELAS_MAX * 100) / 100;
+      const nomeVoz = nome.split(" ")[0];
+      const mensagem = `${nomeVoz}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
+      return ok(res, {
+        cpf: cpfDemo,
+        nome,
+        total,
+        total_fmt: `R$ ${brl(total)}`,
+        desconto_pct: DESCONTO_AVISTA_PCT,
+        valor_avista: valorAvista,
+        valor_avista_fmt: `R$ ${brl(valorAvista)}`,
+        parcelas_max: PARCELAS_MAX,
+        valor_parcela: valorParcela,
+        valor_parcela_fmt: `R$ ${brl(valorParcela)}`,
+        num_faturas: nFaturas,
+        data_vencimento: null,
+        mensagem_inicial: mensagem,
+      });
+    }
+
+    // Cliente não encontrado na base com CPF/telefone real
     return ok(res, {
       nome: "Cliente",
       total: 0,
