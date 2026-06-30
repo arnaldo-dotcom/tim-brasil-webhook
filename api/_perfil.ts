@@ -32,8 +32,13 @@ export function acordoId(cpf: string, tipo: string, valor: number): string {
   return "ACD-" + createHash("sha256").update(input).digest("hex").slice(0, 6).toUpperCase();
 }
 
-export function vencimento(diasAFrente = 3): string {
+export function vencimento(diasUteis = 2): string {
   const d = new Date();
-  d.setDate(d.getDate() + diasAFrente);
+  let count = 0;
+  while (count < diasUteis) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay(); // 0=Dom, 6=Sáb
+    if (dow !== 0 && dow !== 6) count++;
+  }
   return d.toISOString().split("T")[0];
 }

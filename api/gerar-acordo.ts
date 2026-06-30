@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const valorNum = Math.round(parseFloat(String(valorRaw)) * 100) / 100;
 
     const id = acordoId(cpf, tipo, valorNum);
-    const venc = vencimento(3);
+    const venc = vencimento(2);
     const nomeCtx = ctx.nome ? String(ctx.nome).split(" ")[0] : null;
 
     function brl(v: number): string {
