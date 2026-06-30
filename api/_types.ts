@@ -20,8 +20,11 @@ export interface Cliente {
   cpf: string;
   nome: string;
   telefone: string; // +55XXXXXXXXXXX
-  desconto_pct?: number;  // desconto oferecido pelo banco para este cliente
-  parcelas_max?: number;  // máximo de parcelas permitido pelo banco
+  desconto_pct?: number;
+  parcelas_max?: number;
   faturas: Fatura[];
   acordos: Acordo[];
+  propensao?: number;        // intencao_de_pagar 0-10, salvo pelo webhook de insights
+  perfil_psicologico?: string;
+  resumo_sessao?: string;
 }

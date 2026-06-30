@@ -31,6 +31,24 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
       </tr>`
     ).join("");
 
+    // Último acordo
+    const ultimoAcordo = c.acordos?.length
+      ? c.acordos[c.acordos.length - 1]
+      : null;
+    const acordoCell = ultimoAcordo
+      ? `<span style="font-weight:600">${brl(ultimoAcordo.valor)}</span>
+         <br><small style="color:#6b7280">${ultimoAcordo.tipo === "a_vista" ? "à vista" : "parcelado"} · vence ${ultimoAcordo.vencimento.split("-").reverse().join("/")}</small>
+         <br><small style="color:${ultimoAcordo.status === "pago" ? "#22c55e" : "#f59e0b"}">${ultimoAcordo.status}</small>`
+      : `<span style="color:#9ca3af">—</span>`;
+
+    // Propensão 0-10
+    const prop = c.propensao;
+    const propColor = prop == null ? "#9ca3af" : prop >= 7 ? "#22c55e" : prop >= 4 ? "#f59e0b" : "#ef4444";
+    const propCell = prop != null
+      ? `<span style="font-size:18px;font-weight:700;color:${propColor}">${prop}</span><span style="color:#9ca3af;font-size:11px">/10</span>
+         ${c.perfil_psicologico ? `<br><small style="color:#6b7280">${c.perfil_psicologico}</small>` : ""}`
+      : `<span style="color:#9ca3af">—</span>`;
+
     return `
       <tr class="cliente-row">
         <td><strong>${c.nome}</strong><br><small style="color:#6b7280">${c.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}</small></td>
@@ -39,6 +57,8 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         <td>${brl(avista)} <small style="color:#6b7280">(${desconto}% off)</small></td>
         <td>até ${parcMax}x</td>
         <td>${statusAcordo}</td>
+        <td>${acordoCell}</td>
+        <td>${propCell}</td>
         <td>
           <details>
             <summary style="cursor:pointer;color:#3b82f6">${abertas.length} fatura(s)</summary>
@@ -84,10 +104,12 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         <th>Oferta à vista</th>
         <th>Parcelamento</th>
         <th>Status</th>
+        <th>Último acordo</th>
+        <th>Propensão</th>
         <th>Faturas</th>
       </tr>
     </thead>
-    <tbody>${rows || "<tr><td colspan=7 style='text-align:center;color:#6b7280;padding:32px'>Nenhum cliente cadastrado. Rode o seed primeiro.</td></tr>"}</tbody>
+    <tbody>${rows || "<tr><td colspan=9 style='text-align:center;color:#6b7280;padding:32px'>Nenhum cliente cadastrado. Rode o seed primeiro.</td></tr>"}</tbody>
   </table>
 </body>
 </html>`;
