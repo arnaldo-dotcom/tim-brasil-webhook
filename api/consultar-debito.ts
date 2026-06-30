@@ -67,6 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `${nomeVoz}, verificamos sua conta e não encontramos faturas em aberto no momento. Se tiver dúvidas, pode falar com nossa equipe.`
         : `${nomeVoz}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
       return ok(res, {
+        cpf: cliente.cpf,
         nome: cliente.nome,
         total,
         total_fmt: `R$ ${brl(total)}`,
@@ -93,6 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `${nomeVoz}, verificamos sua conta e não encontramos faturas em aberto no momento.`
       : `${nomeVoz}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
     return ok(res, {
+      cpf: cpfFallback,
       nome,
       total,
       total_fmt: `R$ ${brl(total)}`,
