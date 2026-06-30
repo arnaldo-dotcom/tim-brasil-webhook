@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getClienteByCpf, getClienteByPhone } from "./_db";
+import { getClienteByCpf, getClienteByPhone, listClientes } from "./_db";
 import { perfil, DESCONTO_AVISTA_PCT, PARCELAS_MAX } from "./_perfil";
 
 // Moveo lê variáveis de sessão via body.context.{var} e espera a resposta no formato {"context": {...}}
@@ -83,8 +83,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Sem identificador real (web tester / sessão sem CPF e sem telefone) — usa perfil demo
-    if (!cpf && !phone) {
+    // Sem identificador real (web tester / inbound sem telefone) — busca por prefixo do CPF
+    if (!cpf && !phone && prefixoRaw !== null) {
+      const prefixo = String(prefixoRaw).replace(/\D/g, "").slice(0, 3);
+      if (prefixo.length === 3) {
+        try {
+          const todos = await listClientes();
+          cliente = todos.find((c) => c.cpf.startsWith(prefixo)) ?? null;
+        } catch {
+          // KV indisponível
+        }
+      }
+    }
+
+    // Fallback genérico se ainda não encontrou nada (prefixo sem match ou sem prefixo)
+    if (!cliente && !cpf && !phone) {
       const cpfDemo = "00000000000";
       const { nome, nFaturas, valorFatura } = perfil(cpfDemo);
       const total = Math.round(nFaturas * valorFatura * 100) / 100;
@@ -105,6 +118,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         valor_parcela_fmt: `R$ ${brl(valorParcela)}`,
         num_faturas: nFaturas,
         data_vencimento: null,
+        mensagem_inicial: mensagem,
+      });
+    }
+
+    // Se encontrou por prefixo, segue o fluxo normal (cliente != null agora)
+    if (cliente) {
+      const faturas = cliente.faturas.filter((f) => f.status === "aberto");
+      const total = Math.round(faturas.reduce((s, f) => s + f.valor, 0) * 100) / 100;
+      const desconto = cliente.desconto_pct ?? DESCONTO_AVISTA_PCT;
+      const parcelasMax = cliente.parcelas_max ?? PARCELAS_MAX;
+      const valorAvista = Math.round(total * (1 - desconto / 100) * 100) / 100;
+      const valorParcela = Math.round((total * 1.1) / parcelasMax * 100) / 100;
+      const maisAntiga = faturas.sort((a, b) =>
+        (a.vencimento ?? a.competencia).localeCompare(b.vencimento ?? b.competencia)
+      )[0];
+      const dataVencimento = maisAntiga?.vencimento ?? null;
+      const nomeVoz = cliente.nome.split(" ")[0];
+      const mensagem = faturas.length === 0
+        ? `${nomeVoz}, verificamos sua conta e não encontramos faturas em aberto no momento. Se tiver dúvidas, pode falar com nossa equipe.`
+        : `${nomeVoz}, identificamos R$ ${brl(total)} em faturas em aberto na sua conta TIM. Posso te ajudar a regularizar hoje?`;
+      return ok(res, {
+        cpf: cliente.cpf,
+        nome: cliente.nome,
+        total,
+        total_fmt: `R$ ${brl(total)}`,
+        desconto_pct: desconto,
+        valor_avista: valorAvista,
+        valor_avista_fmt: `R$ ${brl(valorAvista)}`,
+        parcelas_max: parcelasMax,
+        valor_parcela: valorParcela,
+        valor_parcela_fmt: `R$ ${brl(valorParcela)}`,
+        num_faturas: faturas.length,
+        data_vencimento: dataVencimento,
         mensagem_inicial: mensagem,
       });
     }
