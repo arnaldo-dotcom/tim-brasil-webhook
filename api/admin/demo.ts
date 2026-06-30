@@ -54,11 +54,6 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         <td><strong>${c.nome}</strong><br><small style="color:#6b7280">${c.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}</small></td>
         <td>${c.telefone}</td>
         <td>${brl(total)}</td>
-        <td>${brl(avista)} <small style="color:#6b7280">(${desconto}% off)</small></td>
-        <td>até ${parcMax}x</td>
-        <td>${statusAcordo}</td>
-        <td>${acordoCell}</td>
-        <td>${propCell}</td>
         <td>
           <details>
             <summary style="cursor:pointer;color:#3b82f6">${abertas.length} fatura(s)</summary>
@@ -68,6 +63,11 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
             </table>
           </details>
         </td>
+        <td>${brl(avista)} <small style="color:#6b7280">(${desconto}% off)</small></td>
+        <td>até ${parcMax}x</td>
+        <td>${statusAcordo}</td>
+        <td>${acordoCell}</td>
+        <td>${propCell}</td>
       </tr>`;
   }).join("");
 
@@ -101,12 +101,12 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         <th>Cliente / CPF</th>
         <th>Telefone</th>
         <th>Total em aberto</th>
+        <th>Faturas</th>
         <th>Oferta à vista</th>
         <th>Parcelamento</th>
         <th>Status</th>
         <th>Último acordo</th>
         <th>Propensão</th>
-        <th>Faturas</th>
       </tr>
     </thead>
     <tbody>${rows || "<tr><td colspan=9 style='text-align:center;color:#6b7280;padding:32px'>Nenhum cliente cadastrado. Rode o seed primeiro.</td></tr>"}</tbody>
